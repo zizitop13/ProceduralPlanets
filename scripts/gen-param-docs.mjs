@@ -17,6 +17,11 @@ const {
   DEFAULT_PARAMS, STAR_DEFAULTS, GAS_DEFAULTS, PLANET_PRESETS, GAS_PRESETS, STAR_PRESETS,
 } = await import(pathToFileURL(presetsPath).href);
 
+import { SMALL_BODY_SHAPES, SMALL_BODY_MATERIALS } from '../src/engine/smallBodyShape.js';
+const smallBodyTypes = Object.fromEntries(Object.entries({
+  smallBodyShape: SMALL_BODY_SHAPES, smallBodyMaterial: SMALL_BODY_MATERIALS,
+}).map(([key, choices]) => [key, choices.map(choice => "'" + choice + "'").join(' | ')]));
+
 // Descriptions for keys that carry no comment in presets.js
 const EXTRA = {
   mode: "Body type: 'planet' (terrestrial), 'gas' or 'star'. Prefer the Planet `type` option.",
@@ -210,7 +215,7 @@ for (const domain of ['planet', 'gas', 'star']) {
   }
 }
 
-const tsType = (e, k) => (k === 'mode' ? "'planet' | 'gas' | 'star'" : k === 'upscaler' ? "'bilinear' | 'spatial'"
+const tsType = (e, k) => smallBodyTypes[k] ?? (k === 'mode' ? "'planet' | 'gas' | 'star'" : k === 'upscaler' ? "'bilinear' | 'spatial'"
   : k === 'weatherSystems' ? "import('./index').WeatherSystemDefinition[]" : e.type === 'color' ? 'ColorInput' : e.type);
 let dts = `${header}
 /** sRGB colour: [r, g, b] in 0..1, '#rrggbb', 0xrrggbb or a THREE.Color. */
@@ -228,7 +233,7 @@ dts += `}
 /** Parameter object as stored on a Planet (every key present, colours as [r, g, b]). */
 export interface ResolvedPlanetParams {
 `;
-const resolvedType = (e, k) => (k === 'mode' ? "'planet' | 'gas' | 'star'" : k === 'weatherSystems' ? "import('./index').WeatherSystemDefinition[]"
+const resolvedType = (e, k) => smallBodyTypes[k] ?? (k === 'mode' ? "'planet' | 'gas' | 'star'" : k === 'weatherSystems' ? "import('./index').WeatherSystemDefinition[]"
   : e.type === 'color' ? '[number, number, number]' : e.type);
 for (const [k, e] of Object.entries(docs)) dts += `  ${k}: ${resolvedType(e, k)};\n`;
 dts += '}\n';

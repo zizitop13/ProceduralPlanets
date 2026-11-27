@@ -109,6 +109,16 @@ export interface PlanetParams {
   seed?: number;
   /** Planet radius in local units (world units at scale 1). Range 600..6000. Default: 2000. */
   radius?: number;
+  /** Radial profile around the nominal X semi-axis Default: 'sphere'. */
+  smallBodyShape?: 'sphere' | 'ellipsoid' | 'fragment' | 'spinningTop' | 'bilobed';
+  /** Y semi-axis relative to X Range 0.25..1. Default: 0.75. */
+  smallBodyHeightRatio?: number;
+  /** Z semi-axis relative to X Range 0.25..1. Default: 0.85. */
+  smallBodyWidthRatio?: number;
+  /** Amplitude of the seeded silhouette variations Range 0..1. Default: 0.6. */
+  smallBodyIrregularity?: number;
+  /** Surface finish for a non-spherical body Default: 'silicate'. */
+  smallBodyMaterial?: 'silicate' | 'carbon' | 'metal' | 'dirtyIce' | 'cometCrust';
   /** Terrain relief: height of the highest peaks above the base radius, in local units. Range 20..400. Default: 80. */
   heightScale?: number;
   /** Sea level, as a fraction of heightScale above the base radius. Range 0..0.9. Default: 0.42. */
@@ -353,6 +363,11 @@ export interface ResolvedPlanetParams {
   gasRingColor: [number, number, number];
   seed: number;
   radius: number;
+  smallBodyShape: 'sphere' | 'ellipsoid' | 'fragment' | 'spinningTop' | 'bilobed';
+  smallBodyHeightRatio: number;
+  smallBodyWidthRatio: number;
+  smallBodyIrregularity: number;
+  smallBodyMaterial: 'silicate' | 'carbon' | 'metal' | 'dirtyIce' | 'cometCrust';
   heightScale: number;
   seaLevel: number;
   noiseScale: number;

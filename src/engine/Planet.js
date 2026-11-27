@@ -1,3 +1,4 @@
+import { SMALL_BODY_SHAPES, SMALL_BODY_MATERIALS, smallBodyBounds } from './smallBodyShape.js';
 import { pickPlanetRay } from '../paint/PlanetPaintPicker.js';
 import { PlanetPaintLayerManager } from '../paint/PlanetPaintLayerManager.js';
 import * as THREE from 'three';
@@ -126,6 +127,14 @@ export function normalizeParam(key, value) {
     const mode = PLANET_TYPES[value] ?? (['planet', 'gas', 'star'].includes(value) ? value : null);
     return mode ? { ok: true, value: mode } : { ok: false, reason: 'invalid' };
   }
+  if (key === 'smallBodyShape' || key === 'smallBodyMaterial') {
+    const choices = key === 'smallBodyShape' ? SMALL_BODY_SHAPES : SMALL_BODY_MATERIALS;
+    return choices.includes(value) ? { ok: true, value } : { ok: false, reason: 'invalid' };
+  }
+  if (key === 'smallBodyHeightRatio' || key === 'smallBodyWidthRatio' || key === 'smallBodyIrregularity') {
+    const min = key === 'smallBodyIrregularity' ? 0 : 0.25;
+    return Number.isFinite(value) && value >= min && value <= 1 ? { ok: true, value } : { ok: false, reason: 'invalid' };
+  }
   if (key === 'seed') {
     const n = Number(value);
     return Number.isFinite(n) ? { ok: true, value: n >>> 0 } : { ok: false, reason: 'invalid' };
@@ -205,7 +214,13 @@ export function resolvePlanetParams(options = {}) {
   if (!mode) mode = explicit.mode != null ? normalizeParam('mode', explicit.mode).value ?? 'planet' : 'planet';
 
   const accepted = acceptParams(explicit, 'Planet');
-  return { ...DEFAULT_PARAMS, ...patch, ...accepted, mode };
+  const params = { ...DEFAULT_PARAMS, ...patch, ...accepted, mode };
+  // Scale the preset's relief with its nominal radius. An authored heightScale
+  // (including one loaded from a project) is always expressed in local units.
+  if (mode === 'planet' && params.smallBodyShape !== 'sphere' && 'radius' in accepted && !('heightScale' in accepted)) {
+    params.heightScale *= params.radius / (patch.radius ?? DEFAULT_PARAMS.radius);
+  }
+  return params;
 }
 
 // ============================================================================
@@ -282,6 +297,8 @@ export class Planet extends THREE.Object3D {
 
   /** 'terrestrial' | 'gas' | 'star' */
   get planetType() { return MODE_TO_TYPE[this.params.mode]; }
+
+  get isSmallBody() { return this.params.mode === 'planet' && this.params.smallBodyShape !== 'sphere'; }
 
   /** Detached canonical generation data; the editor draft never enters the runtime. */
   get terrain() { return JSON.parse(JSON.stringify(this._terrain)); }
@@ -388,7 +405,7 @@ export class Planet extends THREE.Object3D {
     const H = top - ground;
     const HR = H * 0.11;
     const HM = HR / 5;   // exactly 1/5: the composite's view ray uses dMie = dRayleigh^5
-    const s = gas ? p.gasAtmoStrength : p.atmoEnabled ? p.atmoStrength : 0;
+    const s = gas ? p.gasAtmoStrength : !this.isSmallBody && p.atmoEnabled ? p.atmoStrength : 0;
     const haze = gas ? p.gasAtmoHaze : p.atmoHaze;
 
     // Rayleigh colour from the tint: squared so the default blue tint lands on
@@ -516,7 +533,7 @@ export class Planet extends THREE.Object3D {
     // terrain/water sample the cloud field for cast shadows — kill them too
     // when the cloud layer is off
     this.uniforms.uCloudShadowStr.value =
-      this.params.cloudsEnabled ? this.params.cloudShadowStrength : 0;
+      !this.isSmallBody && this.params.cloudsEnabled ? this.params.cloudShadowStrength : 0;
   }
 
   _applySunDir() {
@@ -562,6 +579,8 @@ export class Planet extends THREE.Object3D {
 
   /** Low-level single-key setter (no validation) — used by the studio UI. */
   setParam(key, value) {
+    // Studio project files also use this setter directly.
+    if (key.startsWith('smallBody') && !normalizeParam(key, value).ok) return;
     this._version++;   // anything cached from the params (impostors) is stale
     if (REBUILD_KEYS.has(key)) {
       // a rebuild drops every chunk: only when the structure really changes
@@ -593,6 +612,21 @@ export class Planet extends THREE.Object3D {
         }
         return;
       }
+      case 'smallBodyShape':
+        this.uniforms.uSmallBody.value.x = SMALL_BODY_SHAPES.indexOf(value);
+        for (const material of this.world.templateMaterials) {
+          if (!!material.defines.SMALL_BODY === (value !== 'sphere')) continue;
+          if (value === 'sphere') delete material.defines.SMALL_BODY;
+          else material.defines.SMALL_BODY = 1;
+          material.needsUpdate = true;
+        }
+        this._syncAtmosphere();
+        this._syncShellVisibility();
+        return;
+      case 'smallBodyHeightRatio': this.uniforms.uSmallBody.value.y = value; return;
+      case 'smallBodyWidthRatio': this.uniforms.uSmallBody.value.z = value; return;
+      case 'smallBodyIrregularity': this.uniforms.uSmallBody.value.w = value; return;
+      case 'smallBodyMaterial': this.uniforms.uSmallBodyMaterial.value = SMALL_BODY_MATERIALS.indexOf(value); return;
       case 'cloudResolution':
         return;   // applied per frame (PlanetPasses.setCloudResolution)
       case 'weatherSystems':
@@ -735,6 +769,7 @@ export class Planet extends THREE.Object3D {
       return Math.max(disc, R * (p.starCoronaEnabled ? 2 + 2 * p.starCoronaSize : 1.3));
     }
     const u = this.uniforms;
+    if (this.isSmallBody) return this.surfaceRadius * 1.001;
     return Math.max(R + p.heightScale + this.paintLayers.maxHeight, u.uCloudTop.value, u.uAtmoTop.value) * 1.001;
   }
 
@@ -742,6 +777,9 @@ export class Planet extends THREE.Object3D {
   get surfaceRadius() {
     const p = this.params;
     if (p.mode !== 'planet') return p.radius;
+    if (this.isSmallBody) {
+      return smallBodyBounds(p.radius, this.uniforms.uSmallBody.value).outer + Math.max(0, p.heightScale) + this.paintLayers.maxHeight;
+    }
     return p.radius + (p.waterEnabled ? Math.max(p.seaLevel, 0) : 0) * p.heightScale;
   }
 
@@ -754,13 +792,14 @@ export class Planet extends THREE.Object3D {
     if (p.mode !== 'planet') return p.radius;
     this._sampler ??= this._createHeightSampler();
     const d = _v1.copy(direction).normalize();
-    return p.radius + this._sampler.heightAtDirection(d) + this.paintLayers.sampleHeightOffset(d);
+    return this._sampler.surfaceRadius(d) + this.paintLayers.sampleHeightOffset(d);
   }
 
   /** Base elevation in local units, before the separate paint layer. */
   getBaseElevation(direction) {
     this._sampler ??= this._createHeightSampler();
-    return this._sampler.heightAtDirection(_v1.copy(direction).normalize());
+    const d = _v1.copy(direction).normalize();
+    return this.isSmallBody ? this._sampler.surfaceRadius(d) - this.params.radius : this._sampler.heightAtDirection(d);
   }
 
   /** Restore runtime layers without changing generation settings or editor state. */
@@ -774,18 +813,18 @@ export class Planet extends THREE.Object3D {
   getSurfacePoint(direction, target = new THREE.Vector3()) {
     const p = this.params;
     let r = this.getSurfaceRadius(direction);
-    if (p.mode === 'planet' && p.waterEnabled) r = Math.max(r, this.uniforms.uSeaRadius.value);
+    if (p.mode === 'planet' && !this.isSmallBody && p.waterEnabled) r = Math.max(r, this.uniforms.uSeaRadius.value);
     target.copy(direction).normalize().multiplyScalar(r);
     return this.localToWorld(target);
   }
 
   /** Ray-sphere picking against surfaceRadius (THREE.Raycaster support). */
   raycast(raycaster, intersects) {
-    if (this.params.mode === 'planet' && !this.paintLayers.isEmpty()) {
+    if (this.params.mode === 'planet' && (this.isSmallBody || !this.paintLayers.isEmpty())) {
       const hit = pickPlanetRay(this, raycaster.ray);
       if (hit && hit.distance >= raycaster.near && hit.distance <= raycaster.far) {
         intersects.push({ distance: hit.distance, point: hit.worldPosition,
-          normal: hit.normal.clone().transformDirection(this.matrixWorld), object: this });
+          normal: hit.normal.applyNormalMatrix(_normalMatrix.getNormalMatrix(this.matrixWorld)), object: this });
       }
       return;
     }
@@ -889,6 +928,10 @@ export class Planet extends THREE.Object3D {
     const R = p.radius;
     if (p.mode === 'planet') {
       const relief = p.heightScale + this.paintLayers.maxHeight;
+      if (this.isSmallBody) {
+        const bound = this.boundingRadius;
+        return [Math.max(R * 1e-6, (dist - bound) * 0.8), dist + bound * 1.01];
+      }
       const alt = dist - (R + relief);
       return [Math.max(0.05, alt * 0.8), dist + R + relief + 10];
     }
@@ -954,8 +997,8 @@ export class Planet extends THREE.Object3D {
     return {
       mode: p.mode,
       bloom: p.mode === 'star' ? p.starBloom : 0,
-      water: !!p.waterEnabled,
-      clouds: !!p.cloudsEnabled,
+      water: !this.isSmallBody && !!p.waterEnabled,
+      clouds: !this.isSmallBody && !!p.cloudsEnabled,
       cloudSteps: p.cloudQuality,
       weatherTime: ct * 0.0035,
     };
@@ -1035,6 +1078,7 @@ const _v1 = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
 const _v3 = new THREE.Vector3();
 const _m = new THREE.Matrix4();
+const _normalMatrix = new THREE.Matrix3();
 const _inv = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
 const _ray = new THREE.Ray();

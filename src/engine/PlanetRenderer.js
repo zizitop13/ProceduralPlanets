@@ -397,7 +397,7 @@ export class PlanetRenderer {
       const opaque = i === 0 && opt.background === 'stars';
       // hysteresis: a planet leaves impostor mode 25% above the entry size
       const limit = opt.impostorPixels * (p._impostorMode ? 1.25 : 1);
-      p._impostorMode = !opaque && p.params.mode !== 'star' && px < limit;
+      p._impostorMode = !opaque && !p.isSmallBody && p.params.mode !== 'star' && px < limit;
       if (p._impostorMode) want.push(it);
     });
     if (!want.length) return set;

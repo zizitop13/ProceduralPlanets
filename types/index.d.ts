@@ -19,6 +19,7 @@ export type PlanetType = 'terrestrial' | 'gas' | 'star';
 export type PlanetMode = 'planet' | 'gas' | 'star';
 
 export type TerrestrialPresetName =
+  | 'rockyAsteroid' | 'ridgedRubblePile' | 'icyRingFragment' | 'cometNucleus'
   | 'terran' | 'desert' | 'ice' | 'moon' | 'lava' | 'ocean' | 'mars' | 'swamp' | 'alien' | 'ashen' | 'candy';
 export type GasPresetName = 'gasGiant' | 'ringed' | 'iceGiant' | 'toxic' | 'nebular';
 export type StarPresetName = 'sun' | 'redGiant' | 'blueGiant' | 'whiteDwarf' | 'ember' | 'eldritch';
@@ -219,6 +220,8 @@ export interface ShaderResult { ok: boolean; error?: string }
 export class Planet extends Object3D {
   constructor(options?: PlanetOptions);
   readonly isPlanet: true;
+  /** True while rendering an irregular terrestrial body. */
+  readonly isSmallBody: boolean;
   /** 'terrestrial' | 'gas' | 'star' (Object3D.type is 'Planet'). */
   readonly planetType: PlanetType;
   /** Current parameters (treat as read-only; use set()). */

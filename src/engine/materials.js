@@ -4,6 +4,8 @@ import { NOISE_UNIFORMS_GLSL, NOISE_FUNCTIONS_GLSL } from './noiseGLSL.js';
 import {
   TOON_GLSL, ATMOSPHERE_GLSL, CLOUD_FIELD_GLSL, SURFACE_GLSL, CLIMATE_NOISE_GLSL,
 } from './surfaceGLSL.js';
+import { SMALL_BODY_SHAPES, SMALL_BODY_MATERIALS } from './smallBodyShape.js';
+import { SMALL_BODY_SHAPE_GLSL, SMALL_BODY_SURFACE_GLSL } from './smallBodyGLSL.js';
 import { seedToOffset } from './presets.js';
 import { createWeatherUniforms } from './weather.js';
 
@@ -24,6 +26,9 @@ export function createSharedUniforms(p) {
     uLoopBias:      { value: 0 },   // always 0: opaque loop bounds (see noiseGLSL)
     uSeedOffset:    { value: new THREE.Vector3(off[0], off[1], off[2]) },
     uRadius:        { value: p.radius },
+    uLodEyeScale:  { value: 1 },
+    uSmallBody: { value: new THREE.Vector4(SMALL_BODY_SHAPES.indexOf(p.smallBodyShape), p.smallBodyHeightRatio, p.smallBodyWidthRatio, p.smallBodyIrregularity) },
+    uSmallBodyMaterial: { value: SMALL_BODY_MATERIALS.indexOf(p.smallBodyMaterial) },
     uHeightScale:   { value: p.heightScale },
     uSeaLevel:      { value: p.seaLevel },
     uNoiseScale:    { value: p.noiseScale },
@@ -226,9 +231,11 @@ export const UNIFORM_MAP = {
 const TERRAIN_VERTEX = /* glsl */ `
 ${NOISE_UNIFORMS_GLSL}
 ${NOISE_FUNCTIONS_GLSL}
+${SMALL_BODY_SHAPE_GLSL}
 ${CLIMATE_NOISE_GLSL}
 ${PLANET_PAINT_GLSL}
 
+uniform float uLodEyeScale;
 uniform float uGridRes;   // quads per chunk side
 
 attribute float aSkirt;
@@ -249,7 +256,7 @@ vec3 faceDir(int f, vec2 uv) {
 
 varying vec3 vDir;
 varying vec3 vWorldPos;
-#ifdef ANALYTIC_TERRAIN_DEPTH
+#if defined(ANALYTIC_TERRAIN_DEPTH) && !defined(SMALL_BODY)
 varying float vSkirt;
 #endif
 #ifdef WARP_VARYING
@@ -273,7 +280,8 @@ void main() {
   // by the time they swap. k from the vertex's own distance: continuous
   // across chunks.
   vec2 grid = floor(position.xy * uGridRes + 0.5);
-  float dv = distance(cameraPosition, faceDir(face, iNode.xy + grid / uGridRes * iNode.z) * uRadius);
+  vec3 initialDir = faceDir(face, iNode.xy + grid / uGridRes * iNode.z);
+  float dv = distance(cameraPosition * uLodEyeScale, initialDir * uRadius);
   float morph = clamp((dv - iMorph.x) / max(iMorph.y - iMorph.x, 1e-3), 0.0, 1.0);
   grid -= fract(grid * 0.5) * 2.0 * morph;
   vec3 dir = faceDir(face, iNode.xy + grid / uGridRes * iNode.z);
@@ -307,10 +315,10 @@ void main() {
 #else
   float h = terrainHeight(dir);
 #endif
-  vec3 wp = dir * (uRadius + h + paintHeight(dir) - aSkirt * iMorph.z);
+  vec3 wp = dir * (bodyBaseRadius(dir) + h + paintHeight(dir) - aSkirt * iMorph.z);
   vDir = dir;
   vWorldPos = wp;
-#ifdef ANALYTIC_TERRAIN_DEPTH
+#if defined(ANALYTIC_TERRAIN_DEPTH) && !defined(SMALL_BODY)
   vSkirt = aSkirt * iMorph.z;
 #endif
   gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);
@@ -322,16 +330,18 @@ precision highp float;
 
 ${NOISE_UNIFORMS_GLSL}
 ${NOISE_FUNCTIONS_GLSL}
+${SMALL_BODY_SHAPE_GLSL}
 ${TOON_GLSL}
 ${ATMOSPHERE_GLSL}
 ${CLOUD_FIELD_GLSL}
 ${SURFACE_GLSL}
+${SMALL_BODY_SURFACE_GLSL}
 ${PLANET_PAINT_GLSL}
 ${PLANET_PAINT_ALBEDO_GLSL}
 
 varying vec3 vDir;
 varying vec3 vWorldPos;
-#ifdef ANALYTIC_TERRAIN_DEPTH
+#if defined(ANALYTIC_TERRAIN_DEPTH) && !defined(SMALL_BODY)
 uniform mat4 projectionMatrix;
 varying float vSkirt;
 #endif
@@ -381,8 +391,8 @@ void main() {
 #else
   float h = heightField(dir, grad, cLow, mtn);
 #endif
-  float r = uRadius + h * uHeightScale + paintHeight(dir);
-#ifdef ANALYTIC_TERRAIN_DEPTH
+  float r = bodyBaseRadius(dir) + h * uHeightScale + paintHeight(dir);
+#if defined(ANALYTIC_TERRAIN_DEPTH) && !defined(SMALL_BODY)
   // The ocean is an analytic sphere while a triangle lies below its vertex
   // radii. At shallow physical relief, this chord error exposes triangular
   // ocean patches through land. Reuse the height already evaluated here to
@@ -404,7 +414,7 @@ void main() {
     }
   }
 #endif
-  vec3 finalGrad = grad * uHeightScale + paintGradient(dir);
+  vec3 finalGrad = bodyBaseGradient(dir) + grad * uHeightScale + paintGradient(dir);
   h += paintHeight(dir) / max(uHeightScale, 1e-6);
   vec3 gt = finalGrad - dir * dot(finalGrad, dir);
   vec3 n = normalize(dir - gt / r);
@@ -415,6 +425,20 @@ void main() {
   vec3 dSlope;
   float det = surfaceDetail(vWorldPos, fp, dSlope);
 
+#ifdef SMALL_BODY
+  {
+    float rock = 1.0, snow = 0.0;
+    vec3 albedo = paintedAlbedo(dir, smallBodyAlbedo(dir, det, slope), rock, snow);
+    vec3 normal = normalize(n - 0.32 * (dSlope - n * dot(dSlope, n)));
+    float diffuse = toonShade(max(dot(normal, uSunDir), 0.0));
+    vec3 col = albedo * (vec3(SUN_E * uSunIntensity * diffuse) + skyIrradiance(vWorldPos, normal)) / PI;
+    if (uSmallBodyMaterial == 2.0 && diffuse > 0.0) {
+      vec3 halfDir = normalize(uSunDir + normalize(cameraPosition - vWorldPos));
+      col += albedo * uSunIntensity * pow(max(dot(normal, halfDir), 0.0), 24.0);
+    }
+    gl_FragColor = vec4(col, 1.0);
+  }
+#else
   float rock, snow;
 #ifdef LOW_VARYING
   // climate noises: same corrected interpolation, in dir space
@@ -444,6 +468,7 @@ void main() {
   vec3 col = albedo * (sun * diff + skyIrradiance(vWorldPos, nd)) / PI;
 
   gl_FragColor = vec4(col, 1.0);
+#endif
 }
 `;
 
@@ -465,6 +490,7 @@ export function createTerrainUniforms(shared, program) {
 
 export function createTerrainMaterial(shared, octaves, lowVarying = false, gridRes = 32, graphProgram = null, analyticTerrainDepth = false) {
   const defines = { OCTAVES: octaves };
+  if (shared.uSmallBody.value.x !== 0) defines.SMALL_BODY = 1;
   if (analyticTerrainDepth) defines.ANALYTIC_TERRAIN_DEPTH = 1;
   if (!graphProgram) defines.WARP_VARYING = 1;
   if (lowVarying && !graphProgram) defines.LOW_VARYING = 1;

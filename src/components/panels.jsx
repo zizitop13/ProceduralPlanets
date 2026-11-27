@@ -23,6 +23,23 @@ export function TerrainPanel({ params: p, onParam, terrain = { mode: 'procedural
         </div>
         {terrain.mode === 'nodes' && <p className="terrain-source-note">{translate("The node graph controls the relief.")} <button type="button" onClick={onOpenNodes}>{translate("Open graph editor")}</button></p>}
       </Section>
+      <Section title={translate("Body shape")}>
+        <SelectRow param="smallBodyShape" label={translate("Profile")} value={p.smallBodyShape} options={[
+          { value: 'sphere', label: 'Sphere' }, { value: 'ellipsoid', label: 'Ellipsoid' },
+          { value: 'fragment', label: 'Angular fragment' }, { value: 'spinningTop', label: 'Spinning top' },
+          { value: 'bilobed', label: 'Two lobes' },
+        ]} onChange={(v) => onParam('smallBodyShape', v)} />
+        {p.smallBodyShape !== 'sphere' && <>
+          <Slider param="smallBodyHeightRatio" label={translate("Height / length")} value={p.smallBodyHeightRatio} min={0.25} max={1} step={0.01} onChange={(v) => onParam('smallBodyHeightRatio', v)} />
+          <Slider param="smallBodyWidthRatio" label={translate("Width / length")} value={p.smallBodyWidthRatio} min={0.25} max={1} step={0.01} onChange={(v) => onParam('smallBodyWidthRatio', v)} />
+          <Slider param="smallBodyIrregularity" label={translate("Irregularity")} value={p.smallBodyIrregularity} min={0} max={1} step={0.01} onChange={(v) => onParam('smallBodyIrregularity', v)} />
+          <SelectRow param="smallBodyMaterial" label={translate("Surface finish")} value={p.smallBodyMaterial} options={[
+            { value: 'silicate', label: 'Stony silicate' }, { value: 'carbon', label: 'Carbon-dark' },
+            { value: 'metal', label: 'Metal-rich' }, { value: 'dirtyIce', label: 'Dirty ice' },
+            { value: 'cometCrust', label: 'Comet crust' },
+          ]} onChange={(v) => onParam('smallBodyMaterial', v)} />
+        </>}
+      </Section>
       <Section title={translate("Planet")}>
         <Slider param="radius" label={translate("Radius")} value={p.radius} min={600} max={6000} step={50} digits={0} onChange={(v) => onParam('radius', v)} />
         <Slider param="heightScale" label={translate("Height scale")} value={p.heightScale} min={20} max={400} step={5} digits={0} onChange={(v) => onParam('heightScale', v)} />

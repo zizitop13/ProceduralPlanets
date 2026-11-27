@@ -63,7 +63,7 @@ export class SurfaceWalker {
     this.camera.updateMatrixWorld();
     const ray = new Ray(this.camera.position.clone(), this.camera.getWorldDirection(new Vector3()));
     let hit = pickPlanetRay(planet, ray);
-    if (planet.params.waterEnabled) {
+    if (!planet.isSmallBody && planet.params.waterEnabled) {
       const localRay = ray.clone().applyMatrix4(planet.matrixWorld.clone().invert());
       const sea = localRay.intersectSphere(new Sphere(new Vector3(), planet.uniforms.uSeaRadius.value), new Vector3());
       if (sea) {

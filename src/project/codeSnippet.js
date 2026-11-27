@@ -31,7 +31,9 @@ export function snippetParams(params) {
   for (const key of domainKeys(mode)) {
     if (SKIP.has(key) || !(key in params)) continue;
     const v = params[key];
-    if (key !== 'seed' && same(v, DEFAULT_PARAMS[key])) continue;
+    const scaledBodyRelief = key === 'heightScale' && mode === 'planet' && params.smallBodyShape
+      && params.smallBodyShape !== 'sphere' && params.radius !== DEFAULT_PARAMS.radius;
+    if (key !== 'seed' && !scaledBodyRelief && same(v, DEFAULT_PARAMS[key])) continue;
     out[key] = Array.isArray(v) ? v.map((x) => (typeof x === 'number' ? round(x) : x)) : typeof v === 'number' ? round(v) : v;
   }
   return out;

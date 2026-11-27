@@ -18,7 +18,7 @@ export function pickPlanetRay(planet, worldRay) {
   planet.updateWorldMatrix(true, false);
   const inverse = planet.matrixWorld.clone().invert();
   const ray = worldRay.clone().applyMatrix4(inverse);
-  const bound = planet.params.radius + Math.abs(planet.params.heightScale) * 2 + planet.paintLayers.maxHeight;
+  const bound = planet.isSmallBody ? planet.boundingRadius : planet.params.radius + Math.abs(planet.params.heightScale) * 2 + planet.paintLayers.maxHeight;
   const b = ray.origin.dot(ray.direction), c = ray.origin.lengthSq() - bound * bound;
   const disc = b * b - c;
   if (disc < 0) return null;
@@ -37,9 +37,9 @@ export function pickPlanetRay(planet, worldRay) {
   let previousT = start, previous = residual(start);
   for (let i = 1; i <= steps; i++) {
     const t = start + (end - start) * i / steps, value = residual(t);
-    if (previous >= 0 && value <= 0) {
+    if ((previous >= 0 && value <= 0) || (previous <= 0 && value >= 0)) {
       let lo = previousT, hi = t;
-      for (let k = 0; k < 22; k++) { const mid = (lo + hi) / 2; if (residual(mid) > 0) lo = mid; else hi = mid; }
+      for (let k = 0; k < 22; k++) { const mid = (lo + hi) / 2; if ((residual(mid) > 0) === (previous > 0)) lo = mid; else hi = mid; }
       const localPosition = ray.at((lo + hi) / 2, new THREE.Vector3());
       const localDirection = localPosition.clone().normalize();
       const worldPosition = localPosition.clone().applyMatrix4(planet.matrixWorld);
