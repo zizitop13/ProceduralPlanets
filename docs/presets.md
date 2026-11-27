@@ -12,6 +12,10 @@ returns the names by type at runtime.
 | Preset | Label | Keys changed | Highlights |
 |---|---|---|---|
 | `terran` | Terran | — (the defaults) |  |
+| `rockyAsteroid` | Rocky asteroid | 12 | `seaLevel: 0`, `waterEnabled: false`, `craters: 0.8`, `cloudsEnabled: false`, `atmoEnabled: false` |
+| `ridgedRubblePile` | Ridged rubble pile | 13 | `seaLevel: 0`, `waterEnabled: false`, `craters: 0.8`, `cloudsEnabled: false`, `atmoEnabled: false` |
+| `icyRingFragment` | Icy ring fragment | 13 | `seaLevel: 0`, `waterEnabled: false`, `craters: 0.8`, `cloudsEnabled: false`, `atmoEnabled: false` |
+| `cometNucleus` | Comet nucleus | 14 | `seaLevel: 0`, `waterEnabled: false`, `craters: 0.8`, `cloudsEnabled: false`, `atmoEnabled: false` |
 | `desert` | Desert | 29 | `seaLevel: 0.3`, `tempBias: 0.75`, `cloudCoverage: 0.22`, `polarCaps: 0.35`, `hurricaneCount: 0`, `stormCount: 1`, `rainAmount: 0.2` |
 | `ice` | Ice | 20 | `seaLevel: 0.38`, `tempBias: -0.8`, `cloudCoverage: 0.6`, `polarCaps: 1`, `hurricaneCount: 0`, `stormCount: 2` |
 | `moon` | Moon | 21 | `seaLevel: 0`, `waterEnabled: false`, `craters: 0.9`, `cloudsEnabled: false`, `atmoEnabled: false`, `polarCaps: 0` |

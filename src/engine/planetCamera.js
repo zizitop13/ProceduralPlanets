@@ -42,7 +42,7 @@ export function fitPlanetCamera(planet, host, proxy) {
   }
   proxy.near = host.userData.surfaceWalk
     ? Math.max(1e-7, host.near / scale)
-    : Math.max(0.05, near * depthPerDistance);
+    : Math.max(planet.isSmallBody ? planet.params.radius * 1e-6 : 0.05, near * depthPerDistance);
   proxy.far = Math.max(far, proxy.near + 1);
   proxy.updateProjectionMatrix();
   return distance;

@@ -29,6 +29,16 @@ them live with `planet.set({...})`, read them with `planet.get(key)`.
 | `heightScale` | number | `80` | 20 – 400 | Terrain relief: height of the highest peaks above the base radius, in local units. |
 | `seaLevel` | number | `0.42` | 0 – 0.9 | Sea level, as a fraction of heightScale above the base radius. |
 
+### Body shape
+
+| Key | Type | Default | Range | Description |
+|---|---|---|---|---|
+| `smallBodyShape` | string | `'sphere'` |  | Radial profile around the nominal X semi-axis |
+| `smallBodyHeightRatio` | number | `0.75` | 0.25 – 1 | Y semi-axis relative to X |
+| `smallBodyWidthRatio` | number | `0.85` | 0.25 – 1 | Z semi-axis relative to X |
+| `smallBodyIrregularity` | number | `0.6` | 0 – 1 | Amplitude of the seeded silhouette variations |
+| `smallBodyMaterial` | string | `'silicate'` |  | Surface finish for a non-spherical body |
+
 ### Noise
 
 | Key | Type | Default | Range | Description |

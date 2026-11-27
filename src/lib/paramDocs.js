@@ -563,6 +563,55 @@ export const PARAM_DOCS = {
     "max": 6000,
     "step": 50
   },
+  "smallBodyShape": {
+    "domain": "planet",
+    "group": "Body shape",
+    "label": "Profile",
+    "type": "string",
+    "default": "sphere",
+    "description": "Radial profile around the nominal X semi-axis"
+  },
+  "smallBodyHeightRatio": {
+    "domain": "planet",
+    "group": "Body shape",
+    "label": "Height / length",
+    "type": "number",
+    "default": 0.75,
+    "description": "Y semi-axis relative to X",
+    "min": 0.25,
+    "max": 1,
+    "step": 0.01
+  },
+  "smallBodyWidthRatio": {
+    "domain": "planet",
+    "group": "Body shape",
+    "label": "Width / length",
+    "type": "number",
+    "default": 0.85,
+    "description": "Z semi-axis relative to X",
+    "min": 0.25,
+    "max": 1,
+    "step": 0.01
+  },
+  "smallBodyIrregularity": {
+    "domain": "planet",
+    "group": "Body shape",
+    "label": "Irregularity",
+    "type": "number",
+    "default": 0.6,
+    "description": "Amplitude of the seeded silhouette variations",
+    "min": 0,
+    "max": 1,
+    "step": 0.01
+  },
+  "smallBodyMaterial": {
+    "domain": "planet",
+    "group": "Body shape",
+    "label": "Surface finish",
+    "type": "string",
+    "default": "silicate",
+    "description": "Surface finish for a non-spherical body"
+  },
   "heightScale": {
     "domain": "planet",
     "group": "Planet",

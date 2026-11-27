@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { smallBodyBounds, smallBodyRadius } from './smallBodyShape.js';
 import { createTerrainMaterial } from './materials.js';
 
 // Static unit-sphere caps can be recomputed cheaply; a long close-range tour
@@ -212,6 +213,7 @@ export class PlanetWorld {
     this.pendingCount = 0;       // nothing streams: every chunk is live at once
 
     this._caps = new Map();      // node key -> { c, alpha } (static geometry)
+    this._baseBounds = smallBodyBounds(this.radius, this.shared.uSmallBody.value);
     this._bands = null;
     this._bandsKey = '';
     this._leaves = [];
@@ -344,8 +346,16 @@ export class PlanetWorld {
 
   /** Select, cull and upload the chunks for the camera; `camera` (optional) enables frustum culling. */
   update(cameraPos, camera = null) {
+    const shape = this.shared.uSmallBody.value;
+    this._baseBounds = smallBodyBounds(this.radius, shape);
+    const distance = cameraPos.length();
+    // Pull the eye back to the reference sphere along its radial direction.
+    // CPU selection and GPU morphing then share exactly the same distance
+    // metric, including on the short axis or inside a bilobed waist.
+    const eyeScale = shape.x && distance > 0 ? this.radius / smallBodyRadius(this.radius,
+      shape, this.shared.uSeedOffset.value, cameraPos.x / distance, cameraPos.y / distance, cameraPos.z / distance) : 1;
+    this.shared.uLodEyeScale.value = eyeScale;
     this._updateBands();
-    const R = this.radius;
     const paintExtent = this.shared.uPaintExtent?.value ?? 0;
     const H = this.heightScale + paintExtent;
     const lowLevel = this.useLowVarying ? this.lowVaryingLevel : Infinity;
@@ -353,21 +363,21 @@ export class PlanetWorld {
       camera.updateMatrixWorld();
       this._projView.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     }
-    const updateKey = `${this._bandsKey}|${H}|${paintExtent}|${this.opts.chunkRes}|${lowLevel}|${!!camera}`;
+    const updateKey = `${this._bandsKey}|${this._baseBounds.inner}|${this._baseBounds.outer}|${eyeScale}|${H}|${paintExtent}|${this.opts.chunkRes}|${lowLevel}|${!!camera}`;
     // Lighting and geomorph uniforms still update every frame; the selected
     // chunks and GPU attributes only need work when the view/LOD changes.
     if (updateKey === this._lastUpdateKey && this._camPos.equals(cameraPos)
       && (!camera || this._lastProjView.equals(this._projView))) return;
     this._planes = camera ? this._frustum.setFromProjectionMatrix(this._projView).planes : null;
     const cam = this._camPos.copy(cameraPos);
-    const camDist = cam.length();
-    this._camDist = camDist;
+    const camDist = distance;
+    this._camDist = camDist * eyeScale;
     this._camN = camDist > 0 ? [cam.x / camDist, cam.y / camDist, cam.z / camDist] : [0, 1, 0];
     // horizon: a cap is hidden once its nearest direction is farther than
     // acos(R / camDist) (the tangent) + acos(R / (R + H)) (peaks rising above
     // it) from the camera direction
-    const innerR = Math.max(R * 0.01, R - paintExtent);
-    this._thetaMax = camDist > innerR ? Math.acos(innerR / camDist) + Math.acos(innerR / (R + H)) : Math.PI;
+    const innerR = Math.max(0, this._baseBounds.inner + Math.min(0, this.heightScale) - paintExtent);
+    this._thetaMax = camDist > innerR ? Math.acos(innerR / camDist) + Math.acos(innerR / (this._baseBounds.outer + Math.max(0, this.heightScale) + paintExtent)) : Math.PI;
 
     const leaves = this._leaves;
     leaves.length = 0;
@@ -424,9 +434,9 @@ export class PlanetWorld {
 
   _inFrustum(c, alpha, skirt) {
     if (!this._planes) return true;
-    const R = this.radius;
     const paintExtent = this.shared.uPaintExtent?.value ?? 0;
-    const r0 = R - skirt - paintExtent, r1 = R + this.heightScale + paintExtent;
+    const r0 = this._baseBounds.inner + Math.min(0, this.heightScale) - skirt - paintExtent;
+    const r1 = this._baseBounds.outer + Math.max(0, this.heightScale) + paintExtent;
     const rm = 0.5 * (r0 + r1), ca = Math.cos(alpha);
     const d0 = r0 * r0 + rm * rm - 2 * r0 * rm * ca;
     const d1 = r1 * r1 + rm * rm - 2 * r1 * rm * ca;

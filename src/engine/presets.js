@@ -81,6 +81,11 @@ export const DEFAULT_PARAMS = {
   // world / shape
   seed: 1337,
   radius: 2000,
+  smallBodyShape: 'sphere', // radial profile around the nominal X semi-axis
+  smallBodyHeightRatio: 0.75, // Y semi-axis relative to X
+  smallBodyWidthRatio: 0.85, // Z semi-axis relative to X
+  smallBodyIrregularity: 0.6, // amplitude of the seeded silhouette variations
+  smallBodyMaterial: 'silicate', // surface finish for a non-spherical body
   heightScale: 80,
   seaLevel: 0.42,          // fraction of heightScale
 
@@ -199,11 +204,20 @@ export const DEFAULT_PARAMS = {
 export const REBUILD_KEYS = new Set(['octaves', 'chunkRes', 'maxDepth', 'analyticTerrainDepth']);
 
 // Planet style presets — param patches over DEFAULT_PARAMS.
+const airlessRock = {
+  waterEnabled: false, cloudsEnabled: false, atmoEnabled: false, weatherEnabled: false,
+  cloudShadowStrength: 0, seaLevel: 0, continents: 0, ridge: 0.25, craters: 0.8,
+};
+
 export const PLANET_PRESETS = {
   terran: {
     label: 'Terran',
     patch: {}, // the defaults ARE terran
   },
+  rockyAsteroid: { label: 'Rocky asteroid', patch: { ...airlessRock, smallBodyShape: 'fragment', smallBodyHeightRatio: 0.55, smallBodyWidthRatio: 0.7 } },
+  ridgedRubblePile: { label: 'Ridged rubble pile', patch: { ...airlessRock, smallBodyShape: 'spinningTop', smallBodyHeightRatio: 0.84, smallBodyWidthRatio: 1, smallBodyMaterial: 'carbon' } },
+  icyRingFragment: { label: 'Icy ring fragment', patch: { ...airlessRock, smallBodyShape: 'fragment', smallBodyHeightRatio: 0.45, smallBodyWidthRatio: 0.8, smallBodyMaterial: 'dirtyIce' } },
+  cometNucleus: { label: 'Comet nucleus', patch: { ...airlessRock, smallBodyShape: 'bilobed', smallBodyHeightRatio: 0.78, smallBodyWidthRatio: 0.87, smallBodyMaterial: 'cometCrust', craterScale: 10 } },
   desert: {
     label: 'Desert',
     patch: {

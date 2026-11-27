@@ -6,6 +6,7 @@ import { TOON_GLSL, ATMOSPHERE_GLSL, SURFACE_GLSL } from './surfaceGLSL.js';
 import { PlanetHeightSampler } from './PlanetHeightSampler.js';
 import { STAR_OCTAVES, DEFAULT_STAR_BODY, buildStarBakeFragment } from './star.js';
 import { GAS_OCTAVES, buildGasBakeFragment, buildRingBakeFragment } from './gas.js';
+import { SMALL_BODY_SHAPE_GLSL, SMALL_BODY_SURFACE_GLSL } from './smallBodyGLSL.js';
 import { Planet } from './Planet.js';
 import { createTerrainUniforms } from './materials.js';
 
@@ -49,6 +50,8 @@ ${NOISE_FUNCTIONS_GLSL}
 ${TOON_GLSL}
 ${ATMOSPHERE_GLSL}
 ${SURFACE_GLSL}
+${SMALL_BODY_SHAPE_GLSL}
+${SMALL_BODY_SURFACE_GLSL}
 ${PLANET_PAINT_GLSL}
 ${PLANET_PAINT_ALBEDO_GLSL}
 
@@ -66,8 +69,8 @@ void main() {
   vec3 grad;
   float cLow, mtn;
   float h = heightField(dir, grad, cLow, mtn);
-  float r = uRadius + h * uHeightScale + paintHeight(dir);
-  vec3 finalGrad = grad * uHeightScale + paintGradient(dir);
+  float r = bodyBaseRadius(dir) + h * uHeightScale + paintHeight(dir);
+  vec3 finalGrad = bodyBaseGradient(dir) + grad * uHeightScale + paintGradient(dir);
   h += paintHeight(dir) / max(uHeightScale, 1e-6);
   vec3 n = normalize(dir - (finalGrad - dir * dot(finalGrad, dir)) / r);
   float slope = 1.0 - clamp(dot(n, dir), 0.0, 1.0);
@@ -77,7 +80,9 @@ void main() {
   vec3 dSlope;
   float det = surfaceDetail(wp, fp, dSlope);
   float rock, snow;
-  vec3 col = surfaceAlbedo(dir, h, slope, cLow, mtn, det, rock, snow);
+  vec3 col;
+  if (uSmallBody.x == 0.0) col = surfaceAlbedo(dir, h, slope, cLow, mtn, det, rock, snow);
+  else { col = smallBodyAlbedo(dir, det, slope); rock = 1.0; snow = 0.0; }
   col = paintedAlbedo(dir, col, rock, snow);
 
   if (uBakeLighting) {
@@ -211,7 +216,10 @@ function bakeTerrain(renderer, params, uniforms, options, onProgress) {
 
   const bakeUniforms = cloneBakeUniforms(createTerrainUniforms(uniforms, options.terrainProgram), options);
   const bakeMaterial = new THREE.ShaderMaterial({
-    defines: { OCTAVES: Math.round(options.terrainProgram?.identityParams?.octaves ?? params.octaves) },
+    defines: {
+      OCTAVES: Math.round(options.terrainProgram?.identityParams?.octaves ?? params.octaves),
+      ...(uniforms.uSmallBody.value.x ? { SMALL_BODY: 1 } : {}),
+    },
     uniforms: bakeUniforms,
     vertexShader: BAKE_VERTEX,
     fragmentShader: options.terrainProgram?.glsl
@@ -240,7 +248,7 @@ function bakeTerrain(renderer, params, uniforms, options, onProgress) {
           const fu = x / meshRes;
           const fv = y / meshRes;
           tmp.copy(origin).addScaledVector(u, fu).addScaledVector(v, fv).normalize();
-          const r = params.radius + sampler.heightAtDirection(tmp) + paint.sampleHeightOffset(tmp);
+          const r = sampler.surfaceRadius(tmp) + paint.sampleHeightOffset(tmp);
           positions[p++] = tmp.x * r;
           positions[p++] = tmp.y * r;
           positions[p++] = tmp.z * r;
@@ -275,12 +283,13 @@ function bakeTerrain(renderer, params, uniforms, options, onProgress) {
         map = bakeTexture(renderer, bakeMaterial, texRes, texRes);
       }
 
+      const metal = uniforms.uSmallBody.value.x !== 0 && params.smallBodyMaterial === 'metal';
       const material = new THREE.MeshStandardMaterial({
         name: `Planet_${face.name}`,
         color: map ? 0xffffff : 0x8a9a6a,
         map,
-        roughness: 0.9,
-        metalness: 0.03,
+        roughness: metal ? 0.55 : 0.9,
+        metalness: metal ? 0.65 : 0.03,
       });
       const mesh = new THREE.Mesh(geometry, material);
       mesh.name = `Planet_${face.name}`;
@@ -290,7 +299,7 @@ function bakeTerrain(renderer, params, uniforms, options, onProgress) {
   bakeMaterial.dispose();
   paint.dispose();
 
-  if (options.exportWater && params.waterEnabled && params.seaLevel > 0) {
+  if (uniforms.uSmallBody.value.x === 0 && options.exportWater && params.waterEnabled && params.seaLevel > 0) {
     onProgress('Adding ocean shell');
     const waterRadius = params.radius + params.seaLevel * params.heightScale;
     const water = new THREE.Mesh(
@@ -308,7 +317,7 @@ function bakeTerrain(renderer, params, uniforms, options, onProgress) {
     group.add(water);
   }
 
-  if (options.atmosphere && params.atmoEnabled && params.atmoStrength > 0) {
+  if (uniforms.uSmallBody.value.x === 0 && options.atmosphere && params.atmoEnabled && params.atmoStrength > 0) {
     group.add(atmosphereShell(params.radius + params.heightScale * params.seaLevel, params.radius * (1 + params.atmoHeight),
       params.atmoColor, Math.min(1.2, 0.9 * params.atmoStrength)));
   }

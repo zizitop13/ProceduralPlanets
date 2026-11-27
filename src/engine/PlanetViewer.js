@@ -173,7 +173,9 @@ export class PlanetViewer {
   _applyControlLimits() {
     if (!this.controls) return;
     const p = this.planet.params;
-    this.controls.minDistance = p.radius + p.heightScale * 2.2;
+    this.controls.minDistance = this.planet.isSmallBody
+      ? this.planet.getSurfaceRadius(this.camera.position) + p.radius * 0.002
+      : p.radius + p.heightScale * 2.2;
     this.controls.maxDistance = p.radius * 12;
   }
 

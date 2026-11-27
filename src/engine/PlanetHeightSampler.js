@@ -1,3 +1,5 @@
+import { smallBodyRadius } from './smallBodyShape.js';
+
 // CPU mirror of heightField() in noiseGLSL.js (value path only) — used by the
 // exporter to displace mesh vertices. Must stay in lock-step with the GLSL.
 
@@ -203,6 +205,12 @@ export class PlanetHeightSampler {
     }
 
     return clamp(h, 0, 1);
+  }
+
+  surfaceRadius(dir) {
+    const base = smallBodyRadius(this.params.radius, this.uniforms.uSmallBody.value,
+      this.uniforms.uSeedOffset.value, dir.x, dir.y, dir.z);
+    return base + this.heightAtDirection(dir);
   }
 
   heightAtDirection(dir) {
